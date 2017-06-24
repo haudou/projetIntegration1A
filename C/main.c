@@ -19,55 +19,38 @@ const char *port = "/dev/ttyUSB0";
 static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 char buffer[255];
 char usbData[255];
+char oldBuffer[255];
 int STOP = 0;
 int main() {
 
-    pthread_t th;
+    pthread_t arduino, conversion;
     int idth = 1;
-    //puts("|1|");
-    pthread_create(&th,NULL,readUSB,NULL);
-    //puts("|2|");
-    pthread_detach(th);
-    //char oldBuffer[255];
-    //strcpy(oldBuffer,buffer);
+    pthread_create(&arduino,NULL,readUSB,NULL);
+    pthread_detach(arduino);
+    strcpy(oldBuffer,usbData);
     while(1) {
-        //puts("1");
         pthread_mutex_lock(&mtx);
-        //printf("Data : %s \n", buffer);
-        //char * send = "0 sunny 1 cloudy 100";
-        //if(usbData != oldBuffer) {
+
+        if(strcmp(oldBuffer,usbData)!=0) {
+            puts("");
             char **parse = parseToString(usbData);
-            if (*parse != NULL) {
-                //printf("%s \n", parse);
-                /*for (int i = 0; i < 5; i++)
-                    printf("%d : %s \n", i, parse[i]);*/
+            if (parse[0] != "Error") {
                 char *tmp = toJson(parse);
-                //printf("JSON : %s", tmp);
-                //"https://webservice-deploy.herokuapp.com/create"
-                //printf("JSON >>>%s |||", tmp);
-                //curl(tmp,"https://webservice-deploy.herokuapp.com/create");
+                curl(tmp, "https://webservice-deploy.herokuapp.com/create");
                 free(tmp);
-                //strcpy(oldBuffer,usbData);
-            //}
+            } else {
+                puts("Erreur de parse");
+            }
         }
+        strcpy(oldBuffer, usbData);
         pthread_mutex_unlock(&mtx);
-
-            //free(parse);
-
-        //STOP = 0;
-        //free(data);
     }
     pthread_mutex_destroy(&mtx);
 }
 char * toJson(char ** toConvert)
 {
     cJSON *root = cJSON_CreateObject();
-    //printf("Etape 1) Afficher buffer : %s \n", buffer);
-
-
     cJSON_AddStringToObject(root, "timestamps", *(toConvert+4));
-    //message = cJSON_Print(root);
-    //printf("AddString to obj : %s \n", message);
 
     cJSON * weather = cJSON_CreateArray();
     cJSON * weatherKind = cJSON_CreateObject();
@@ -82,12 +65,6 @@ char * toJson(char ** toConvert)
     cJSON_AddItemToObject(root,"weather", weather);
     char * message = malloc(sizeof(root));
     message = cJSON_Print(root);
-   // printf("Tableau : %s \n", message);
-    //puts("|4|");
-    //        message = cJSON_Print(root);
-    //printf("<<<<<< %s >>>>>>",message);
-    //cJSON_AddItemToArray(root, fld = cJSON_CreateObject());
-    //return message;
     return message;
 }
 
@@ -98,8 +75,8 @@ char **parseToString(char * string)
     int a,b,c;
     char d[255], e[255], ca[255], cb[255], cc[255];
     int res = sscanf(string,"%d %s %d %s %d",&a,d,&b,e,&c);
-    printf("RES : %d |", res);
-    if(res != 0) {
+    //printf("RES : %d |", res);
+    if(res > 0) {
         sprintf(ca, "%d", a);
         sprintf(cb, "%d", b);
         sprintf(cc, "%d", c);
@@ -119,19 +96,16 @@ char **parseToString(char * string)
         strcpy(tab[4], cc);
         return tab;
     }
-        char **tmp;
-    tmp = NULL;
-    return tmp;
+    tab[0] = "Error";
+    return tab;
 }
 void *readUSB(void * args){
-    //puts("5555");
     //////////////////////////////////////////////
     //Lire port serie, lecture canonique (Attend un NL ou CR)
     int USB = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK);//O_NDELAY
     if (USB < 0)
         perror(USB);
-    //read(USB,buffer,255);
-    //printf("%s",s);
+
     struct termios oldtoptions, toptions;
 
     //Option
@@ -186,7 +160,6 @@ void *readUSB(void * args){
 
     int done = 1;
     char *string;
-    //int length = 0;
     while(1) {
         pthread_mutex_lock(&mtx);
         for (int i = 0; i < 255; i++)
@@ -198,14 +171,8 @@ void *readUSB(void * args){
                 //perror("Error ");
                 //printf("errno = %d \n", errno);
             }
-            //printf("Length :  %d \n", n);
-            //buffer[n] = '\0'; //Set end of string (for printf)
-            //printf("Longueur l    &: %d \n", n );
             if ((int) strlen(buffer) > 0) {
-                //printf("<Recu %s | %d >\n", buffer, (int) strlen(buffer));
-                // done = 0;
-                //oneTime == 0;
-                //strcpy(string,buffer);
+
                 strcpy(usbData,buffer);
                 STOP = 1;
             }
@@ -214,12 +181,8 @@ void *readUSB(void * args){
                 *(buffer + i) = NULL;
             pthread_mutex_unlock(&mtx);
             STOP = 0;
-            //return send;
-            //*buffer = '\0';
-
         }
     }
-        //printf("String %s ", buffer);
 
     tcsetattr(USB, TCSANOW, &oldtoptions);
     close(USB);
